@@ -1,0 +1,31 @@
+# --- Archivos de Python ---
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.pyo
+
+# --- Entornos virtuales ---
+venv/
+env/
+ENV/
+.venv/
+ev_marcador_ratas
+
+# --- Archivos temporales ---
+*.log
+*.tmp
+*.swp
+*.bak
+*.DS_Store
+*.idea/
+.vscode/
+
+# --- Compilados / builds ---
+*.egg-info/
+*.egg
+build/
+dist/
+
+# --- Otros ---
+*.sqlite3

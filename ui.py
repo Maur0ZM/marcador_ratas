@@ -2,16 +2,27 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import tkinter.font as tkfont
-import re
-
+import re, pygame, os, sys
+from PIL import Image, ImageTk
 from styles import setup_styles, ArrowIndicator
 from logic import GameState, START_SECONDS
+
+def resource_path(relative_path):
+    """ Devuelve ruta válida tanto en .py como en .exe """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 class Scoreboard(tk.Tk):
     def __init__(self):
         super().__init__()
         setup_styles(self)
 
+        pygame.mixer.init()
+        beep_path = resource_path("assets/beep.wav")
+        self.tone = pygame.mixer.Sound(beep_path)
+        self.tone.set_volume(1.0)
+        
         # --- Modelo ---
         self.state = GameState()
         self.state.apply_minutes()
@@ -24,7 +35,8 @@ class Scoreboard(tk.Tk):
         self.grid_columnconfigure(0, weight=1, uniform="main")
         self.grid_columnconfigure(1, weight=3, uniform="main")
         self.grid_columnconfigure(2, weight=1, uniform="main")
-
+        self.fullscreen = False  
+        
         # --- Fuentes escalables ---
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.base_w, self.base_h = sw, sh
@@ -37,7 +49,7 @@ class Scoreboard(tk.Tk):
             (self.f_small,  24),
             (self.f_medium, 40),
             (self.f_big,   140),
-            (self.f_red,    64),
+            (self.f_red,    94),
         ]
 
         # --- UI ---
@@ -50,6 +62,11 @@ class Scoreboard(tk.Tk):
 
         # --- Loop de ticks (UI dirige el reloj) ---
         self._schedule_ticks()
+        
+    def _play_tun(self, times=1, gap_ms=180):
+        self.tone.play()
+        if times > 1:
+            self.after(gap_ms, lambda: self._play_tun(times-1, gap_ms))
 
     # ----------------- Construcción UI -----------------
     def _configurar_grid(self, widget, rows, cols):
@@ -62,89 +79,110 @@ class Scoreboard(tk.Tk):
         style = ttk.Style(self)
         if "clam" in style.theme_names():
             style.theme_use("clam")
+            
+        img = Image.open(resource_path("assets/bandera-roja.png"))
+        img = img.resize((80, 80), Image.LANCZOS)
+        self.flag_img = ImageTk.PhotoImage(img)
 
+        self.window_toolbar = tk.Frame(self, bg="#000")
+        self.window_toolbar.grid(row=0, column=0, columnspan=3, sticky="nsew")
+        
         left_bar  = tk.Frame(self, bg="#000"); left_bar.grid(row=1, column=0, rowspan=2, sticky="nsew")
         right_bar = tk.Frame(self, bg="#000"); right_bar.grid(row=1, column=2, rowspan=2, sticky="nsew")
-        top_bar   = tk.Frame(self, bg="#111"); top_bar.grid(row=0, column=0, columnspan=3, sticky="nsew")
-        center    = tk.Frame(self, bg="#111"); center.grid(row=1, column=1, rowspan=2, sticky="nsew")
-        top_bar.grid_rowconfigure(0, weight=0, minsize=0)
+        center    = tk.Frame(self, bg="#000"); center.grid(row=1, column=1, rowspan=2, sticky="nsew")
         self._configurar_grid(left_bar,  5, 1)
         self._configurar_grid(right_bar, 5, 1)
         self._configurar_grid(center, 4, 3)
 
-        ttk.Button(top_bar, text="MENU",  command=self.show_menu,  takefocus=False, style="Menu.TButton").grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
-        ttk.Button(top_bar, text="EDITAR", command=self.edit_config, takefocus=False, style="Menu.TButton").grid(row=0, column=2, sticky="nsew", padx=8, pady=8)
+        ttk.Button(self.window_toolbar, text="MENU",  command=self.show_menu,
+                takefocus=False, style="Menu.TButton").grid(row=0, column=0, sticky="w", padx=8, pady=8)
+        ttk.Button(self.window_toolbar, text="EDITAR", command=self.edit_config,
+                takefocus=False, style="Menu.TButton").grid(row=0, column=1, sticky="w", padx=8, pady=8)
 
         # Izquierda
         self.arrow_left = ArrowIndicator(left_bar, side="left", on=False,
                                         active="#00d4ff", inactive="#303030",
-                                        width=120, height=200,
+                                        width=150, height=150,
                                         command=self._on_arrow_left)
-        self.arrow_left.grid(row=0, column=0, padx=8, pady=8, sticky="ew")
-        self.score_left  = tk.Label(left_bar, text="0", bg="#111", fg="#00ff7f", font=self.f_big)
+        self.arrow_left.grid(row=0, column=0)
+        self.score_left  = tk.Label(left_bar, text="0", bg="#000", fg="#00ff7f", font=self.f_big)
         self.score_left.grid(row=2, column=0, padx=12, pady=10)
         
-        FM_frame_left = tk.Frame(left_bar, bg="#111")
-        FM_frame_left.grid(row=3, column=0, columnspan=2, pady=5)
+        FM_frame_left = tk.Frame(left_bar, bg="#000")
+        FM_frame_left.grid(row=3, column=0, columnspan=3, pady=5)
+
 
         # ---- FALTAS ----
-        self.foul_left = tk.Label(FM_frame_left, text="Faltas:", bg="#111", fg="#00ff7f", font=self.f_small)
+        self.foul_left = tk.Label(FM_frame_left, text="Faltas:", bg="#000", fg="#00ff7f", font=self.f_small)
         self.foul_left.grid(row=0, column=0, sticky="e", padx=(0,5))  # col 0
 
-        self.foul_left_value = tk.Label(FM_frame_left, text="0", bg="#111", fg="#00ff7f", font=self.f_medium)
-        self.foul_left_value.grid(row=0, column=1, sticky="w")         # col 1
+        self.foul_left_value = tk.Label(FM_frame_left, text="0", bg="#000", fg="#00ff7f", font=self.f_medium)
+        self.foul_left_value.grid(row=0, column=1, padx=(0,10))         # col 1
 
+        self.flag_left_box = tk.Frame(FM_frame_left, bg="#000", width=80, height=80)
+        self.flag_left_box.grid(row=0, column=2, padx=(0,0))
+        self.flag_left_box.grid_propagate(False)  # no reduzcas el frame al tamaño del hijo
+        
+        self.label_imgI = tk.Label(self.flag_left_box, image=self.flag_img, bg="#000")
+                
         # ---- MINUTOS ----
-        self.minutes_left_label = tk.Label(FM_frame_left, text="Minutos:", bg="#111", fg="#00ff7f", font=self.f_small)
+        self.minutes_left_label = tk.Label(FM_frame_left, text="Minutos:", bg="#000", fg="#00ff7f", font=self.f_small)
         self.minutes_left_label.grid(row=1, column=0, sticky="e", padx=(0,5))  # fila 1, col 0
 
-        self.minutes_left_value = tk.Label(FM_frame_left, text="", bg="#111", fg="#00ff7f", font=self.f_medium)
+        self.minutes_left_value = tk.Label(FM_frame_left, text="", bg="#000", fg="#00ff7f", font=self.f_medium)
         self.minutes_left_value.grid(row=1, column=1, sticky="w")               # fila 1, col 1
 
         # Derecha
         self.arrow_right = ArrowIndicator(right_bar, side="right", on=False,
                                         active="#00d4ff", inactive="#303030",
-                                        width=120, height=200,
+                                        width=150, height=150,
                                         command=self._on_arrow_right)
-        self.arrow_right.grid(row=0, column=0, padx=8, pady=8, sticky="ew")
-        self.score_right = tk.Label(right_bar, text="0", bg="#111", fg="#00ff7f", font=self.f_big)
+        
+        self.arrow_right.grid(row=0, column=0)
+        self.score_right = tk.Label(right_bar, text="0", bg="#000", fg="#00ff7f", font=self.f_big)
         self.score_right.grid(row=2, column=0, padx=12, pady=10)
 
-        FM_frame_right = tk.Frame(right_bar, bg="#111")
-        FM_frame_right.grid(row=3, column=0, columnspan=2, pady=5)
+        FM_frame_right = tk.Frame(right_bar, bg="#000")
+        FM_frame_right.grid(row=3, column=0, columnspan=3, pady=5)
 
         # ---- FALTAS ----
-        self.foul_right = tk.Label(FM_frame_right, text="Faltas:", bg="#111", fg="#00ff7f", font=self.f_small)
+        self.foul_right = tk.Label(FM_frame_right, text="Faltas:", bg="#000", fg="#00ff7f", font=self.f_small)
         self.foul_right.grid(row=0, column=0, sticky="e", padx=(0,5))  # col 0
 
-        self.foul_right_value = tk.Label(FM_frame_right, text="0", bg="#111", fg="#00ff7f", font=self.f_medium)
-        self.foul_right_value.grid(row=0, column=1, sticky="w")         # col 1
+        self.foul_right_value = tk.Label(FM_frame_right, text="0", bg="#000", fg="#00ff7f", font=self.f_medium)
+        self.foul_right_value.grid(row=0, column=1, padx=(0,10))         # col 1
+
+        self.flag_right_box = tk.Frame(FM_frame_right, bg="#000", width=80, height=80)
+        self.flag_right_box.grid(row=0, column=2, padx=(0,0))
+        self.flag_right_box.grid_propagate(False)
+        
+        self.label_imgD = tk.Label(self.flag_right_box, image=self.flag_img, bg="#000")
 
         # ---- MINUTOS ----
-        self.minutes_right_label = tk.Label(FM_frame_right, text="Minutos:", bg="#111", fg="#00ff7f", font=self.f_small)
+        self.minutes_right_label = tk.Label(FM_frame_right, text="Minutos:", bg="#000", fg="#00ff7f", font=self.f_small)
         self.minutes_right_label.grid(row=1, column=0, sticky="e", padx=(0,5))  # fila 1, col 0
 
-        self.minutes_right_value = tk.Label(FM_frame_right, text="", bg="#111", fg="#00ff7f", font=self.f_medium)
+        self.minutes_right_value = tk.Label(FM_frame_right, text="", bg="#000", fg="#00ff7f", font=self.f_medium)
         self.minutes_right_value.grid(row=1, column=1, sticky="w")
 
         # Centro
-        self.period_lbl = tk.Label(center, text="1º", bg="#111", fg="#ffd700", font=self.f_red)
+        self.period_lbl = tk.Label(center, text="1º", bg="#000", fg="#ffd700", font=self.f_red)
         self.period_lbl.grid(row=0, column=1, sticky="n")
 
-        self.time_lbl   = tk.Label(center, text="10:00", bg="#111", fg="white", font=self.f_big)
+        self.time_lbl = tk.Label(center, text="10:00", bg="#000", fg="white", font=self.f_big)
         self.time_lbl.grid(row=1, column=1, sticky="n")
-        
-        FM_frame_center = tk.Frame(center, bg="#111")
+
+        FM_frame_center = tk.Frame(center, bg="#000")
         FM_frame_center.grid(row=2, column=0, columnspan=3, pady=5)
         
         self.names_label = tk.Label(
             FM_frame_center,
             text=f"{self.state.team_names[0]} - {self.state.team_names[1]}",
-            bg="#111", fg="white", font=self.f_medium
+            bg="#000", fg="white", font=self.f_medium
         )
         self.names_label.grid(row=0, column=0, columnspan=3, sticky="n")
 
-        self.shot_lbl = tk.Label(center, text="24", bg="#111", fg="#ffd700", font=self.f_red)
+        self.shot_lbl = tk.Label(center, text="24", bg="#000", fg="#ffd700", font=self.f_red)
         self.shot_lbl.grid(row=3, column=1, sticky="s", pady=6)
 
     # ----------------- Callbacks flechas -----------------
@@ -161,14 +199,30 @@ class Scoreboard(tk.Tk):
         s = self.state
         self.score_left.config(text=str(s.scores[0]))
         self.score_right.config(text=str(s.scores[1]))
-        self.foul_left_value.config(text=str(s.fouls[0]))
-        self.foul_right_value.config(text=str(s.fouls[1]))
         self.minutes_left_value.config(text=str(s.minutes[0]))
         self.minutes_right_value.config(text=str(s.minutes[1]))
         self.names_label.config(text=f"{s.team_names[0]} - {s.team_names[1]}")
         self.period_lbl.config(text=s.period_str())
         self.time_lbl.config(text=s.time_str())
         self.shot_lbl.config(text=s.shot_str())
+        
+        # Lado izquierdo
+        self.foul_left_value.config(text=str(s.fouls[0]))
+        if s.fouls[0] >= 5:
+            if not self.label_imgI.winfo_ismapped():
+                self.label_imgI.pack(expand=True)  # ocupa su caja
+        else:
+            if self.label_imgI.winfo_ismapped():
+                self.label_imgI.pack_forget()
+
+        # Lado derecho
+        self.foul_right_value.config(text=str(s.fouls[1]))
+        if s.fouls[1] >= 5:
+            if not self.label_imgD.winfo_ismapped():
+                self.label_imgD.pack(expand=True)
+        else:
+            if self.label_imgD.winfo_ismapped():
+                self.label_imgD.pack_forget()
 
     # ----------------- Ticks dirigidos por la UI -----------------
     def _schedule_ticks(self):
@@ -176,11 +230,14 @@ class Scoreboard(tk.Tk):
         ended = self.state.tick_game_1s()
         if ended:
             self._blink_time()
+            
         # 24s
-        shot_ended = self.state.tick_shot_1s()
-        if shot_ended:
-            self._blink_widget(self.shot_lbl, end_color="#ff2b2b", times=6, interval=250)
-        # refresco UI
+        evt = self.state.tick_shot_1s()
+        if evt == "shot10":
+            self._play_tun(times=1)       
+        elif evt == "shot5":
+            self._play_tun(times=2, gap_ms=500) 
+            
         self._refresh_all()
         # reprogramo
         self.after(1000, self._schedule_ticks)
@@ -283,6 +340,19 @@ class Scoreboard(tk.Tk):
             self.menu_win = None; win.destroy()
 
         win.protocol("WM_DELETE_WINDOW", on_close)
+        
+    def toggle_fullscreen(self, event=None):
+        self.fullscreen = not self.fullscreen
+        self.attributes("-fullscreen", self.fullscreen)
+
+        if self.fullscreen:
+            # Oculta barra y colapsa la fila 0
+            self.window_toolbar.grid_remove()
+            self.grid_rowconfigure(0, weight=0, minsize=0)
+        else:
+            # Muestra barra y restaura su alto
+            self.window_toolbar.grid()
+            self.grid_rowconfigure(0, weight=0, minsize=56)  # o el alto que quieras
 
     # ----------------- Hotkeys -----------------
     def _bind_keys(self):
@@ -303,6 +373,8 @@ class Scoreboard(tk.Tk):
         self.bind("2", lambda e: (self.state.reset_shot_14(), self._refresh_all()))
         self.bind("3", lambda e: (self.state.reset_shot_24(), self._refresh_all()))
         self.bind("<Shift_L>", lambda e: (self.state.toggle_shot(), self._refresh_all()))
+        self.bind("f", self.toggle_fullscreen)
+    
     # ----------------- Escalado -----------------
     def _on_resize(self, event):
         w = max(self.winfo_width(), 1); h = max(self.winfo_height(), 1)

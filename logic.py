@@ -21,6 +21,11 @@ class GameState:
     shot_running:  bool = False
     minutes_having: bool = False
     minutes_penalized: bool = False
+    red_flag_team1: bool = False
+
+    # flags de aviso
+    shot_beep10_done: bool = False
+    shot_beep5_done:  bool = False
 
     # ---------- Util ----------
     @staticmethod
@@ -77,7 +82,7 @@ class GameState:
             self.minutes[1] += 2
             self.minutes_having = True
 
-        elif self.period == 3:
+        elif self.period == 3 and self.minutes_having:
             self.minutes[0] = 3
             self.minutes[1] = 3
             
@@ -91,7 +96,6 @@ class GameState:
             self.minutes[0] -= 1
             self.minutes[1] -= 1
             self.minutes_penalized = True
-
 
     def add_minutes(self, team: int, count: int):
         if count < 0:
@@ -111,19 +115,26 @@ class GameState:
 
     def reset_shot_24(self):
         self.shot_time = 24
+        self.shot_running = True
+        self.shot_beep10_done = self.shot_beep5_done = False
 
     def reset_shot_14(self):
         self.shot_time = 14
+        self.shot_running = True
+        self.shot_beep10_done = self.shot_beep5_done = False
 
     def next_period(self):
         self.period += 1
         self.fouls = [0, 0]
+        self.apply_minutes() 
         self.reset_time()
 
     def reset_all(self):
         self.scores = [0, 0]
         self.team_names = ["Team 1", "Team 2"]
         self.period = 1
+        self.fouls = [0, 0]
+        self.minutes = [2, 2]
         self.reset_time()
     
     # ---------- “Ticks” de 1 segundo (la UI los llama con after) ----------
@@ -132,22 +143,35 @@ class GameState:
         if not self.running:
             return False
         if self.time_left > 0:
+            self.apply_minutes() 
             self.time_left -= 1
             return False
         else:
             self.running = False
             return True  # llegó a 0
 
-    def tick_shot_1s(self) -> bool:
-        self.apply_minutes()
+    def tick_shot_1s(self):
         if not self.shot_running:
-            return False
+            return None
+
+        evt = None
+        # Marca eventos, pero NO retornes aún
+        if self.shot_time == 10 and not self.shot_beep10_done:
+            self.shot_beep10_done = True
+            evt = "shot10"
+        if self.shot_time == 5 and not self.shot_beep5_done:
+            self.shot_beep5_done = True
+            # si ya venía "shot10", mantén el primero o prioriza "shot5"
+            evt = evt or "shot5"
+
+        # Ahora sí, avanza el reloj
         if self.shot_time > 0:
             self.shot_time -= 1
-            return False
-        else:
-            self.shot_running = False
-            return True  # llegó a 0
+            return evt
+
+        # Llegó a 0
+        self.shot_running = False
+        return "shot0"
 
     def toggle_game(self):
         self.running = not self.running
@@ -157,3 +181,5 @@ class GameState:
 
     def toggle_shot(self):
         self.shot_running = not self.shot_running
+        
+            
