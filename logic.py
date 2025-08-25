@@ -175,9 +175,7 @@ class GameState:
 
     def toggle_game(self):
         self.running = not self.running
-        # opcional: sincronizar con 24s
-        if self.running and not self.shot_running:
-            self.shot_running = True
+        
 
     def toggle_shot(self):
         self.shot_running = not self.shot_running

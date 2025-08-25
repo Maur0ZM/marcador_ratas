@@ -356,7 +356,7 @@ class Scoreboard(tk.Tk):
 
     # ----------------- Hotkeys -----------------
     def _bind_keys(self):
-        self.bind("<space>",  lambda e: (self.state.toggle_game(), self._refresh_all()))
+        self.bind("<space>",  lambda e: (self.state.toggle_game(), self.state.toggle_shot(), self._refresh_all()))
         self.bind("<Return>", lambda e: (self.state.next_period(), self._refresh_all()))
         self.bind("z", lambda e: (self.state.add_points(0, +1), self._refresh_all()))
         self.bind("x", lambda e: (self.state.add_points(0, -1), self._refresh_all()))
